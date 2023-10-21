@@ -119,7 +119,7 @@ def next_history_util_multiplier(history: str, next_history: str) -> float:
 class InformationSet:
     def __init__(self, key: InformationSetKey):
         self.key = key
-        # TODO adjust for multiple cards. For one card, this could be ALL_IN/FOLD or Draw 0/Draw 1
+        # TODO adjust for multiple cards. For one card, this could be ALL_IN/FOLD or DRAW_0/DRAW_1
         if len(key.history) == 2 or len(key.history) == 3:
             self.actions = ["ALL_IN", "FOLD"]
         elif len(key.history) == 4 or len(key.history) == 5:
