@@ -1,5 +1,6 @@
 from typing import List
 
+
 # TODO hypothetical function to use when there are actually 5 cards
 def calculate_hand_rank(cards: List[str]):
     """
@@ -13,7 +14,9 @@ def calculate_hand_rank(cards: List[str]):
     """
     num_cards = len(cards)
     if num_cards > 5:
-        raise ValueError(f"Provided cards {cards}. This has length {len(cards)}, but only 5 cards or less are supported")
+        raise ValueError(
+            f"Provided cards {cards}. This has length {len(cards)}, but only 5 cards or less are supported"
+        )
 
     # Create a dictionary to count the frequency of each rank
     rank_count = {}
@@ -24,10 +27,18 @@ def calculate_hand_rank(cards: List[str]):
         else:
             rank_count[rank] = 1
 
-    quads = list(reversed(sorted([rank for card, count in rank_count.items() if count == 4])))
-    trips = list(reversed(sorted([rank for card, count in rank_count.items() if count == 3])))
-    pairs = list(reversed(sorted([rank for card, count in rank_count.items() if count == 2])))
-    no_pairs = list(reversed(sorted([rank for card, count in rank_count.items() if count == 1])))
+    quads = list(
+        reversed(sorted([rank for card, count in rank_count.items() if count == 4]))
+    )
+    trips = list(
+        reversed(sorted([rank for card, count in rank_count.items() if count == 3]))
+    )
+    pairs = list(
+        reversed(sorted([rank for card, count in rank_count.items() if count == 2]))
+    )
+    no_pairs = list(
+        reversed(sorted([rank for card, count in rank_count.items() if count == 1]))
+    )
 
     hand_rank = []
     for rank in quads:

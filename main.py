@@ -17,21 +17,21 @@ N_ITERATIONS = 1000
 DRAW_PREFIX = "DRAW_"
 
 # Ranks from 2 to Ace (ignoring suits)
-RANKS = [str(rank) for rank in range(2, 10)] + ['J', 'Q', 'K', 'A']
+RANKS = [str(rank) for rank in range(2, 10)] + ["J", "Q", "K", "A"]
 RANK_VALUES = {
-    '2': 0,
-    '3': 1,
-    '4': 2,
-    '5': 3,
-    '6': 4,
-    '7': 5,
-    '8': 6,
-    '9': 7,
-    'T': 8,
-    'J': 9,  # Jack
-    'Q': 10,  # Queen
-    'K': 11,  # King
-    'A': 12,  # Ace
+    "2": 0,
+    "3": 1,
+    "4": 2,
+    "5": 3,
+    "6": 4,
+    "7": 5,
+    "8": 6,
+    "9": 7,
+    "T": 8,
+    "J": 9,  # Jack
+    "Q": 10,  # Queen
+    "K": 11,  # King
+    "A": 12,  # Ace
 }
 CARDS_PER_RANK = 1
 FULL_DECK = Multiset(RANKS * CARDS_PER_RANK)
@@ -45,10 +45,12 @@ class InformationSetKey:
     def __str__(self):
         return f"{self.card} {self.history}"
 
+
 class Player(Enum):
     PLAYER_1 = "PLAYER_1"
     PLAYER_2 = "PLAYER_2"
     TERMINAL = "TERMINAL"
+
 
 def action_to_history_char(action: str) -> str:
     """
@@ -67,6 +69,7 @@ def action_to_history_char(action: str) -> str:
         return action[-1]
     else:
         raise RuntimeError(f"Invalid action: {action}")
+
 
 def history_to_player(history: str) -> Player:
     """
@@ -104,10 +107,14 @@ def next_history_util_multiplier(history: str, next_history: str) -> float:
     history_player = history_to_player(history)
     next_history_player = history_to_player(next_history)
 
-    if (history_player == Player.PLAYER_1 and next_history_player in (Player.PLAYER_1, Player.TERMINAL)) or (history_player == Player.PLAYER_2 and next_history_player == Player.PLAYER_2):
+    if (
+        history_player == Player.PLAYER_1
+        and next_history_player in (Player.PLAYER_1, Player.TERMINAL)
+    ) or (history_player == Player.PLAYER_2 and next_history_player == Player.PLAYER_2):
         return 1.0
     else:
         return -1.0
+
 
 class InformationSet:
     def __init__(self, key: InformationSetKey):
@@ -168,22 +175,25 @@ class InformationSet:
 
     def __str__(self):
         actions = self.actions
-        strategies = ['{:03.2f}'.format(x)
-                      for x in self.get_average_strategy()]
-        actions_to_strategies = {action: strategy for action, strategy in zip(actions, strategies)}
-        return '{} {}'.format(str(self.key).ljust(10), actions_to_strategies)
+        strategies = ["{:03.2f}".format(x) for x in self.get_average_strategy()]
+        actions_to_strategies = {
+            action: strategy for action, strategy in zip(actions, strategies)
+        }
+        return "{} {}".format(str(self.key).ljust(10), actions_to_strategies)
 
 
-def cfr(*,
-        information_set_map: Dict[InformationSetKey, InformationSet],
-        history: str,
-        card_1: str,
-        card_2: str,
-        player_1_discarded: Multiset,
-        player_2_discarded: Multiset,
-        pr_1: float,
-        pr_2: float,
-        pr_c: float) -> np.array:
+def cfr(
+    *,
+    information_set_map: Dict[InformationSetKey, InformationSet],
+    history: str,
+    card_1: str,
+    card_2: str,
+    player_1_discarded: Multiset,
+    player_2_discarded: Multiset,
+    pr_1: float,
+    pr_2: float,
+    pr_c: float,
+) -> np.array:
     """
     Counterfactual regret minimization algorithm.
 
@@ -218,7 +228,9 @@ def cfr(*,
 
     n = len(history)
     player = history_to_player(history)
-    info_set = get_info_set(information_set_map, card_1 if player == Player.PLAYER_1 else card_2, history)
+    info_set = get_info_set(
+        information_set_map, card_1 if player == Player.PLAYER_1 else card_2, history
+    )
 
     strategy = info_set.strategy
     if player == Player.PLAYER_1:
@@ -240,48 +252,66 @@ def cfr(*,
                 expected_value = 0
                 if player == Player.PLAYER_1:
                     player_1_discarded = Multiset([card_1])
-                    cards_to_draw_from = FULL_DECK - Multiset([card_1, card_2]) - player_2_discarded
+                    cards_to_draw_from = (
+                        FULL_DECK - Multiset([card_1, card_2]) - player_2_discarded
+                    )
                     for card in cards_to_draw_from:
                         card_1 = card
-                        expected_value += (util_multiplier * cfr(information_set_map=information_set_map,
-                                                                              history=next_history,
-                                                                              card_1=card_1,
-                                                                              card_2=card_2,
-                                                                              player_1_discarded=player_1_discarded,
-                                                                              player_2_discarded=player_2_discarded,
-                                                                              pr_1=pr_1 * strategy[i],
-                                                                              pr_2=pr_2,
-                                                                              pr_c=pr_c * 1 / len(cards_to_draw_from)))
+                        expected_value += util_multiplier * cfr(
+                            information_set_map=information_set_map,
+                            history=next_history,
+                            card_1=card_1,
+                            card_2=card_2,
+                            player_1_discarded=player_1_discarded,
+                            player_2_discarded=player_2_discarded,
+                            pr_1=pr_1 * strategy[i],
+                            pr_2=pr_2,
+                            pr_c=pr_c * 1 / len(cards_to_draw_from),
+                        )
                     action_utils[i] = expected_value / len(cards_to_draw_from)
                 else:
                     player_2_discarded = Multiset([card_2])
                     cards_to_draw_from = FULL_DECK - Multiset([card_1, card_2])
                     for card in cards_to_draw_from:
                         card_2 = card
-                        expected_value += (util_multiplier * cfr(information_set_map=information_set_map,
-                                                                history=next_history,
-                                                                card_1=card_1,
-                                                                card_2=card_2,
-                                                                player_1_discarded=player_1_discarded,
-                                                                player_2_discarded=player_2_discarded,
-                                                                pr_1=pr_1,
-                                                                pr_2=pr_2 * strategy[i],
-                                                                pr_c=pr_c * 1 / len(cards_to_draw_from)))
+                        expected_value += util_multiplier * cfr(
+                            information_set_map=information_set_map,
+                            history=next_history,
+                            card_1=card_1,
+                            card_2=card_2,
+                            player_1_discarded=player_1_discarded,
+                            player_2_discarded=player_2_discarded,
+                            pr_1=pr_1,
+                            pr_2=pr_2 * strategy[i],
+                            pr_c=pr_c * 1 / len(cards_to_draw_from),
+                        )
                     action_utils[i] = expected_value / len(cards_to_draw_from)
 
         else:
             if player == Player.PLAYER_1:
-                action_utils[i] = util_multiplier * cfr(information_set_map=information_set_map,
-                                                                     history=next_history,
-                                                                     card_1=card_1,
-                                                                     card_2=card_2,
-                                                                     player_1_discarded=player_1_discarded,
-                                                                     player_2_discarded=player_2_discarded,
-                                                                     pr_1=pr_1 * strategy[i],
-                                                                     pr_2=pr_2,
-                                                                     pr_c=pr_c)
+                action_utils[i] = util_multiplier * cfr(
+                    information_set_map=information_set_map,
+                    history=next_history,
+                    card_1=card_1,
+                    card_2=card_2,
+                    player_1_discarded=player_1_discarded,
+                    player_2_discarded=player_2_discarded,
+                    pr_1=pr_1 * strategy[i],
+                    pr_2=pr_2,
+                    pr_c=pr_c,
+                )
             else:
-                action_utils[i] = util_multiplier * cfr(information_set_map=information_set_map, history=next_history, card_1=card_1, card_2=card_2, player_1_discarded=player_1_discarded, player_2_discarded=player_2_discarded, pr_1=pr_1,pr_2=pr_2 * strategy[i],pr_c=pr_c)
+                action_utils[i] = util_multiplier * cfr(
+                    information_set_map=information_set_map,
+                    history=next_history,
+                    card_1=card_1,
+                    card_2=card_2,
+                    player_1_discarded=player_1_discarded,
+                    player_2_discarded=player_2_discarded,
+                    pr_1=pr_1,
+                    pr_2=pr_2 * strategy[i],
+                    pr_c=pr_c,
+                )
 
     # Utility of information set.
     util = sum(action_utils * strategy)
@@ -309,16 +339,16 @@ def chance_util(information_set_map) -> float:
             if card_1 != card_2:
                 probability = 1 / 78
                 expected_value += probability * cfr(
-                                                  information_set_map=information_set_map,
-                                                  history="rr",
-                                                  card_1=card_1,
-                                                  card_2=card_2,
-                                                  player_1_discarded=Multiset(),
-                                                  player_2_discarded=Multiset(),
-                                                  pr_1=1,
-                                                  pr_2=2,
-                                                  pr_c=probability
-                                                  )
+                    information_set_map=information_set_map,
+                    history="rr",
+                    card_1=card_1,
+                    card_2=card_2,
+                    player_1_discarded=Multiset(),
+                    player_2_discarded=Multiset(),
+                    pr_1=1,
+                    pr_2=2,
+                    pr_c=probability,
+                )
     return expected_value
 
 
@@ -343,7 +373,10 @@ def terminal_util(history: str, card_1: str, card_2: str):
         return POSTED_POT_PLAYER2
     return STACK_SIZE if RANK_VALUES[card_1] < RANK_VALUES[card_2] else -STACK_SIZE
 
-def get_info_set(i_map: Dict[InformationSetKey, InformationSet], card: str, history: str) -> InformationSet:
+
+def get_info_set(
+    i_map: Dict[InformationSetKey, InformationSet], card: str, history: str
+) -> InformationSet:
     """
     Retrieve information set from dictionary.
     """
@@ -357,27 +390,52 @@ def get_info_set(i_map: Dict[InformationSetKey, InformationSet], card: str, hist
 
     return i_map[key]
 
-def display_results(ev: float, information_set_map: Dict[InformationSetKey, InformationSet]):
-    print('player 1 expected value: {}'.format(ev))
-    print('player 2 expected value: {}'.format(-1 * ev))
 
-    sorted_items = sorted(information_set_map.items(), key=lambda x: RANK_VALUES[x[0].card])
+def display_results(
+    ev: float, information_set_map: Dict[InformationSetKey, InformationSet]
+):
+    print("player 1 expected value: {}".format(ev))
+    print("player 2 expected value: {}".format(-1 * ev))
+
+    sorted_items = sorted(
+        information_set_map.items(), key=lambda x: RANK_VALUES[x[0].card]
+    )
 
     print()
-    print('player 1 strategies pre-flop:')
-    for iset in [iset for iset_key, iset in sorted_items if history_to_player(iset_key.history) == Player.PLAYER_1 and len(iset_key.history) == 2]:
+    print("player 1 strategies pre-flop:")
+    for iset in [
+        iset
+        for iset_key, iset in sorted_items
+        if history_to_player(iset_key.history) == Player.PLAYER_1
+        and len(iset_key.history) == 2
+    ]:
         print(iset)
     print()
-    print('player 1 strategies drawing:')
-    for iset in [iset for iset_key, iset in sorted_items if history_to_player(iset_key.history) == Player.PLAYER_1 and len(iset_key.history) == 5]:
+    print("player 1 strategies drawing:")
+    for iset in [
+        iset
+        for iset_key, iset in sorted_items
+        if history_to_player(iset_key.history) == Player.PLAYER_1
+        and len(iset_key.history) == 5
+    ]:
         print(iset)
     print()
-    print('player 2 strategies pre-flop:')
-    for iset in [iset for iset_key, iset in sorted_items if history_to_player(iset_key.history) == Player.PLAYER_2 and len(iset_key.history) == 3]:
+    print("player 2 strategies pre-flop:")
+    for iset in [
+        iset
+        for iset_key, iset in sorted_items
+        if history_to_player(iset_key.history) == Player.PLAYER_2
+        and len(iset_key.history) == 3
+    ]:
         print(iset)
     print()
-    print('player 2 strategies draw:')
-    for iset in [iset for iset_key, iset in sorted_items if history_to_player(iset_key.history) == Player.PLAYER_2 and len(iset_key.history) == 4]:
+    print("player 2 strategies draw:")
+    for iset in [
+        iset
+        for iset_key, iset in sorted_items
+        if history_to_player(iset_key.history) == Player.PLAYER_2
+        and len(iset_key.history) == 4
+    ]:
         print(iset)
 
 
@@ -389,16 +447,17 @@ def main():
     expected_game_value_sum = 0
 
     for i in range(1, N_ITERATIONS + 1):
-        expected_game_value_sum += cfr(information_set_map=information_set_map,
-                                       history="",
-                                       card_1=-1,
-                                       card_2=-1,
-                                       player_1_discarded=Multiset(),
-                                       player_2_discarded=Multiset(),
-                                       pr_1=1,
-                                       pr_2=1,
-                                       pr_c=1,
-                                      )
+        expected_game_value_sum += cfr(
+            information_set_map=information_set_map,
+            history="",
+            card_1=-1,
+            card_2=-1,
+            player_1_discarded=Multiset(),
+            player_2_discarded=Multiset(),
+            pr_1=1,
+            pr_2=1,
+            pr_c=1,
+        )
         for _, v in information_set_map.items():
             v.next_strategy()
         expected_game_value = expected_game_value_sum / i
@@ -406,6 +465,7 @@ def main():
     print()
 
     display_results(expected_game_value, information_set_map)
+
 
 if __name__ == "__main__":
     main()
