@@ -12,7 +12,7 @@ Post-flop:
 5. Then, the hands go to showdown. If PLAYER_1 shows the lower hand, the payoff is (STACK_SIZE,-STACK_SIZE). Otherwise, the payoff is (-STACK_SIZE,STACK_SIZE). Ties are generally possible (however, not in the version with only one card dealt and one card/rank in the deck). In this case, the payoff is (0,0) for a chop.
 
 
-The information sets for push-fold can represented by a tuple of (cards, history). 
+The information sets for push-fold can represented by a tuple of (cards, history), written as [cards]_[history]. 
 
 History is represented by a string of
 [random chance actions, e.g. 'rr'][Pre-flop actions, e.g. 'af', 'f', or 'aa'][Optional post-flop actions, e.g. '00', '10']
