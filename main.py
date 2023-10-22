@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Tuple, Dict
 
 import numpy as np
+import json
 from multiset import Multiset
 
 InformationSetKey = Tuple[str, str]
@@ -33,8 +35,8 @@ RANK_VALUES = {
     "K": 11,  # King
     "A": 12,  # Ace
 }
-CARDS_PER_RANK = 1
-FULL_DECK = Multiset(RANKS * CARDS_PER_RANK)
+NUM_CARDS_PER_RANK = 1
+FULL_DECK = Multiset(RANKS * NUM_CARDS_PER_RANK)
 
 
 @dataclass(frozen=True, eq=True, order=True)
@@ -43,7 +45,7 @@ class InformationSetKey:
     history: str
 
     def __str__(self):
-        return f"{self.card} {self.history}"
+        return f"{self.card}_{self.history}"
 
 
 class Player(Enum):
@@ -172,6 +174,11 @@ class InformationSet:
 
     def make_positive(self, x):
         return np.where(x > 0, x, 0)
+
+    def actions_to_stratgies(self):
+        return {
+            action: strategy for action, strategy in zip(self.actions, self.get_average_strategy())
+        }
 
     def __str__(self):
         actions = self.actions
@@ -391,53 +398,37 @@ def get_info_set(
     return i_map[key]
 
 
-def display_results(
-    ev: float, information_set_map: Dict[InformationSetKey, InformationSet]
+def export_results(
+    ev: float, information_set_map: Dict[InformationSetKey, InformationSet], file_path: Path
 ):
-    print("player 1 expected value: {}".format(ev))
-    print("player 2 expected value: {}".format(-1 * ev))
+    results = {}
+    results["metadata"] = {
+        "stack_size": STACK_SIZE,
+        "posted_pot_p1": POSTED_POT_PLAYER1,
+        "posted_pot_p2": POSTED_POT_PLAYER2,
+        "num_iterations": N_ITERATIONS,
+        "num_cards": NUM_CARDS,
+        "num_cards_per_rank": NUM_CARDS_PER_RANK,
+    }
+    results["player_1_expected_value"] = ev
+    results["player_2_expected_value"] = -ev
 
     sorted_items = sorted(
         information_set_map.items(), key=lambda x: RANK_VALUES[x[0].card]
     )
 
-    print()
-    print("player 1 strategies pre-flop:")
-    for iset in [
-        iset
-        for iset_key, iset in sorted_items
-        if history_to_player(iset_key.history) == Player.PLAYER_1
-        and len(iset_key.history) == 2
-    ]:
-        print(iset)
-    print()
-    print("player 1 strategies drawing:")
-    for iset in [
-        iset
-        for iset_key, iset in sorted_items
-        if history_to_player(iset_key.history) == Player.PLAYER_1
-        and len(iset_key.history) == 5
-    ]:
-        print(iset)
-    print()
-    print("player 2 strategies pre-flop:")
-    for iset in [
-        iset
-        for iset_key, iset in sorted_items
-        if history_to_player(iset_key.history) == Player.PLAYER_2
-        and len(iset_key.history) == 3
-    ]:
-        print(iset)
-    print()
-    print("player 2 strategies draw:")
-    for iset in [
-        iset
-        for iset_key, iset in sorted_items
-        if history_to_player(iset_key.history) == Player.PLAYER_2
-        and len(iset_key.history) == 4
-    ]:
-        print(iset)
+    results["player_1_preflop"] = {str(key): value.actions_to_stratgies() for key, value in sorted_items if history_to_player(key.history) == Player.PLAYER_1 and len(key.history) == 2}
+    results["player_1_postflop"] = {str(key): value.actions_to_stratgies() for key, value in sorted_items if history_to_player(key.history) == Player.PLAYER_1 and len(key.history) == 5}
+    results["player_2_preflop"] = {str(key): value.actions_to_stratgies() for key, value in sorted_items if history_to_player(key.history) == Player.PLAYER_1 and len(key.history) == 3}
+    results["player_2_postflop"] = {str(key): value.actions_to_stratgies() for key, value in sorted_items if history_to_player(key.history) == Player.PLAYER_1 and len(key.history) == 4}
 
+    # Serializing json
+    json_object = json.dumps(results, indent=2)
+    file_path.parent.mkdir(exist_ok=True, parents=True)
+
+    # Writing to sample.json
+    with open(file_path, "w") as outfile:
+        outfile.write(json_object)
 
 def main():
     """
@@ -464,7 +455,7 @@ def main():
         print(f"Iteration {i}. {expected_game_value=}")
     print()
 
-    display_results(expected_game_value, information_set_map)
+    export_results(expected_game_value, information_set_map, Path(f"results/push_fold_{STACK_SIZE}BB.json"))
 
 
 if __name__ == "__main__":
