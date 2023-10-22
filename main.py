@@ -177,7 +177,8 @@ class InformationSet:
 
     def actions_to_stratgies(self):
         return {
-            action: strategy for action, strategy in zip(self.actions, self.get_average_strategy())
+            action: strategy
+            for action, strategy in zip(self.actions, self.get_average_strategy())
         }
 
     def __str__(self):
@@ -399,7 +400,9 @@ def get_info_set(
 
 
 def export_results(
-    ev: float, information_set_map: Dict[InformationSetKey, InformationSet], file_path: Path
+    ev: float,
+    information_set_map: Dict[InformationSetKey, InformationSet],
+    file_path: Path,
 ):
     results = {}
     results["metadata"] = {
@@ -417,10 +420,26 @@ def export_results(
         information_set_map.items(), key=lambda x: RANK_VALUES[x[0].card]
     )
 
-    results["player_1_preflop"] = {str(key): value.actions_to_stratgies() for key, value in sorted_items if history_to_player(key.history) == Player.PLAYER_1 and len(key.history) == 2}
-    results["player_1_postflop"] = {str(key): value.actions_to_stratgies() for key, value in sorted_items if history_to_player(key.history) == Player.PLAYER_1 and len(key.history) == 5}
-    results["player_2_preflop"] = {str(key): value.actions_to_stratgies() for key, value in sorted_items if history_to_player(key.history) == Player.PLAYER_1 and len(key.history) == 3}
-    results["player_2_postflop"] = {str(key): value.actions_to_stratgies() for key, value in sorted_items if history_to_player(key.history) == Player.PLAYER_1 and len(key.history) == 4}
+    results["player_1_preflop"] = {
+        str(key): value.actions_to_stratgies()
+        for key, value in sorted_items
+        if history_to_player(key.history) == Player.PLAYER_1 and len(key.history) == 2
+    }
+    results["player_1_postflop"] = {
+        str(key): value.actions_to_stratgies()
+        for key, value in sorted_items
+        if history_to_player(key.history) == Player.PLAYER_1 and len(key.history) == 5
+    }
+    results["player_2_preflop"] = {
+        str(key): value.actions_to_stratgies()
+        for key, value in sorted_items
+        if history_to_player(key.history) == Player.PLAYER_2 and len(key.history) == 3
+    }
+    results["player_2_postflop"] = {
+        str(key): value.actions_to_stratgies()
+        for key, value in sorted_items
+        if history_to_player(key.history) == Player.PLAYER_2 and len(key.history) == 4
+    }
 
     # Serializing json
     json_object = json.dumps(results, indent=2)
@@ -429,6 +448,7 @@ def export_results(
     # Writing to sample.json
     with open(file_path, "w") as outfile:
         outfile.write(json_object)
+
 
 def main():
     """
@@ -455,7 +475,11 @@ def main():
         print(f"Iteration {i}. {expected_game_value=}")
     print()
 
-    export_results(expected_game_value, information_set_map, Path(f"results/push_fold_{STACK_SIZE}BB.json"))
+    export_results(
+        expected_game_value,
+        information_set_map,
+        Path(f"results/push_fold_{STACK_SIZE}BB.json"),
+    )
 
 
 if __name__ == "__main__":
