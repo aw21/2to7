@@ -1,3 +1,4 @@
+import random
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -15,7 +16,7 @@ STACK_SIZE = 3  # Initial stack size for both players (5BB)
 POSTED_POT_PLAYER1 = 0.5  # Player 1 posts 0.5BB
 POSTED_POT_PLAYER2 = 1.0  # Player 2 posts 1BB
 NUM_CARDS = 1  # Number of cards each player is dealt
-N_ITERATIONS = 1000
+N_ITERATIONS = 1000000
 DRAW_PREFIX = "DRAW_"
 
 # Ranks from 2 to Ace (ignoring suits)
@@ -263,9 +264,9 @@ def cfr(
                     cards_to_draw_from = (
                         FULL_DECK - Multiset([card_1, card_2]) - player_2_discarded
                     )
-                    for card in cards_to_draw_from:
-                        card_1 = card
-                        expected_value += util_multiplier * cfr(
+                    card_drawn = random.sample(sorted(cards_to_draw_from), 1)[0]
+                    card_1 = card_drawn
+                    action_utils[i] = util_multiplier * cfr(
                             information_set_map=information_set_map,
                             history=next_history,
                             card_1=card_1,
@@ -274,26 +275,24 @@ def cfr(
                             player_2_discarded=player_2_discarded,
                             pr_1=pr_1 * strategy[i],
                             pr_2=pr_2,
-                            pr_c=pr_c * 1 / len(cards_to_draw_from),
+                            pr_c=pr_c,
                         )
-                    action_utils[i] = expected_value / len(cards_to_draw_from)
                 else:
                     player_2_discarded = Multiset([card_2])
                     cards_to_draw_from = FULL_DECK - Multiset([card_1, card_2])
-                    for card in cards_to_draw_from:
-                        card_2 = card
-                        expected_value += util_multiplier * cfr(
-                            information_set_map=information_set_map,
-                            history=next_history,
-                            card_1=card_1,
-                            card_2=card_2,
-                            player_1_discarded=player_1_discarded,
-                            player_2_discarded=player_2_discarded,
-                            pr_1=pr_1,
-                            pr_2=pr_2 * strategy[i],
-                            pr_c=pr_c * 1 / len(cards_to_draw_from),
-                        )
-                    action_utils[i] = expected_value / len(cards_to_draw_from)
+                    card_drawn = random.sample(sorted(cards_to_draw_from), 1)[0]
+                    card_2 = card_drawn
+                    action_utils[i] = util_multiplier * cfr(
+                        information_set_map=information_set_map,
+                        history=next_history,
+                        card_1=card_1,
+                        card_2=card_2,
+                        player_1_discarded=player_1_discarded,
+                        player_2_discarded=player_2_discarded,
+                        pr_1=pr_1,
+                        pr_2=pr_2 * strategy[i],
+                        pr_c=pr_c,
+                    )
 
         else:
             if player == Player.PLAYER_1:
@@ -341,22 +340,18 @@ def is_deal_node(history):
 
 def chance_util(information_set_map) -> float:
     # TODO adjust for multiple cards
-    expected_value = 0
-    for card_1 in RANKS:
-        for card_2 in RANKS:
-            if card_1 != card_2:
-                probability = 1 / 78
-                expected_value += probability * cfr(
-                    information_set_map=information_set_map,
-                    history="rr",
-                    card_1=card_1,
-                    card_2=card_2,
-                    player_1_discarded=Multiset(),
-                    player_2_discarded=Multiset(),
-                    pr_1=1,
-                    pr_2=1,
-                    pr_c=probability,
-                )
+    card_1, card_2 = random.sample(sorted(FULL_DECK), 2)
+    expected_value = cfr(
+        information_set_map=information_set_map,
+        history="rr",
+        card_1=card_1,
+        card_2=card_2,
+        player_1_discarded=Multiset(),
+        player_2_discarded=Multiset(),
+        pr_1=1.0,
+        pr_2=1.0,
+        pr_c=1.0,
+    )
     return expected_value
 
 
@@ -472,7 +467,8 @@ def main():
         for _, v in information_set_map.items():
             v.next_strategy()
         expected_game_value = expected_game_value_sum / i
-        print(f"Iteration {i}. {expected_game_value=}")
+        if i % 10000 == 0:
+            print(f"Iteration {i}. {expected_game_value=}")
     print()
 
     export_results(
