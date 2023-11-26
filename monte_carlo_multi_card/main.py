@@ -18,7 +18,7 @@ POSTED_POT_PLAYER2 = 1.0  # Player 2 posts 1BB
 NUM_CARDS = 2  # Number of cards each player is dealt
 NUM_CARDS_PER_RANK = 2
 INITIAL_POT = POSTED_POT_PLAYER1 + POSTED_POT_PLAYER2
-TERMINATION_THRESHOLD_PERCENTAGE = 0.01 # Percent of pot exploitability needed for termination
+TERMINATION_THRESHOLD_PERCENTAGE = 0.001 # Percent of pot exploitability needed for termination
 DRAW_PREFIX = "DRAW_"
 
 # Ranks from 2 to Ace (ignoring suits)
@@ -520,6 +520,7 @@ def get_info_set(
 def export_results(
     ev: float,
     information_set_map: Dict[InformationSetKey, InformationSet],
+    iterations_dict: Dict,
     file_path: Path,
 ):
     results = {}
@@ -529,9 +530,11 @@ def export_results(
         "posted_pot_p2": POSTED_POT_PLAYER2,
         "num_cards": NUM_CARDS,
         "num_cards_per_rank": NUM_CARDS_PER_RANK,
+        "termination_threshold_percentage": TERMINATION_THRESHOLD_PERCENTAGE
     }
     results["player_1_expected_value"] = ev
     results["player_2_expected_value"] = -ev
+    results["iteration_info"] = iterations_dict
 
     sorted_items = sorted(
         information_set_map.items(), key=lambda x: tuple(RANK_VALUES[card] for card in x[0].cards), reverse=True
@@ -576,6 +579,10 @@ def main():
 
     i = 0
     nash_distance_upper_bound = np.inf
+    iterations = []
+    expected_values = []
+    regrets = []
+    nash_distances = []
     while nash_distance_upper_bound > (TERMINATION_THRESHOLD_PERCENTAGE * INITIAL_POT):
         expected_game_value_sum += cfr(
             information_set_map=information_set_map,
@@ -595,15 +602,30 @@ def main():
         player_1_info_sets = [info_set for key, info_set in information_set_map.items() if key.history == 'rr']
         overall_regret_upper_bound = sum([max(max(info_set.regret_sum), 0) for info_set in player_1_info_sets]) / sum(info_set.reach_pr_sum for info_set in player_1_info_sets)
         nash_distance_upper_bound = 2 * overall_regret_upper_bound
-        if i % 1000 == 0:
+        if (i==1) or (i < 1000 and i % 100 == 0) or (i % 1000 == 0):
             print(f"Iteration {i}. {expected_game_value=}, {overall_regret_upper_bound=}, {nash_distance_upper_bound=}")
+            iterations.append(i)
+            expected_values.append(expected_game_value)
+            regrets.append(overall_regret_upper_bound)
+            nash_distances.append(nash_distance_upper_bound)
 
     print(f"Finished after {i} iterations. {expected_game_value=}, {overall_regret_upper_bound=}, {nash_distance_upper_bound=}")
+    iterations.append(i)
+    expected_values.append(expected_game_value)
+    regrets.append(overall_regret_upper_bound)
+    nash_distances.append(nash_distance_upper_bound)
 
+    iterations_dict = {
+        "iterations": iterations,
+        "expected_values": expected_values,
+        "regrets": regrets,
+        "nash_distances": nash_distances
+    }
 
     export_results(
         expected_game_value,
         information_set_map,
+        iterations_dict,
         Path(f"results/push_fold_{STACK_SIZE}BB.json"),
     )
 
