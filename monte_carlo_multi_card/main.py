@@ -4,6 +4,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Tuple, Dict, Optional, List
 
+import pandas as pd
 import numpy as np
 import json
 from multiset import Multiset
@@ -15,8 +16,8 @@ NUM_PLAYERS = 2
 STACK_SIZE = 3  # Initial stack size for both players
 POSTED_POT_PLAYER1 = 0.5  # Player 1 posts 0.5BB
 POSTED_POT_PLAYER2 = 1.0  # Player 2 posts 1BB
-NUM_CARDS = 2  # Number of cards each player is dealt
-NUM_CARDS_PER_RANK = 2
+NUM_CARDS = 5  # Number of cards each player is dealt
+NUM_CARDS_PER_RANK = 4
 INITIAL_POT = POSTED_POT_PLAYER1 + POSTED_POT_PLAYER2
 TERMINATION_THRESHOLD_PERCENTAGE = 0.001 # Percent of pot exploitability needed for termination
 DRAW_PREFIX = "DRAW_"
@@ -405,12 +406,12 @@ def cfr(
                     )
             else:
                 cards_to_draw_from = list(FULL_DECK - Multiset(cards_1) - Multiset(cards_2))
-                cards_2, player_2_discarded = draw_result(cards_2, cards_to_draw_from, n_cards_to_draw)
+                new_cards_2, player_2_discarded = draw_result(cards_2, cards_to_draw_from, n_cards_to_draw)
                 action_utils[i] = util_multiplier * cfr(
                     information_set_map=information_set_map,
                     history=next_history,
                     cards_1=cards_1,
-                    cards_2=cards_2,
+                    cards_2=new_cards_2,
                     player_1_discarded=player_1_discarded,
                     player_2_discarded=player_2_discarded,
                     pr_1=pr_1,
@@ -569,7 +570,6 @@ def export_results(
     with open(file_path, "w") as outfile:
         outfile.write(json_object)
 
-
 def main():
     """
     Run iterations of counterfactual regret minimization algorithm.
@@ -578,6 +578,7 @@ def main():
     expected_game_value_sum = 0
 
     i = 0
+    result_path = Path(f"results/push_fold_{NUM_CARDS}_cardsperplayer_{NUM_CARDS_PER_RANK}_cardsperrank_{STACK_SIZE}BB_stacksize.json")
     nash_distance_upper_bound = np.inf
     iterations = []
     expected_values = []
@@ -603,30 +604,40 @@ def main():
         overall_regret_upper_bound = sum([max(max(info_set.regret_sum), 0) for info_set in player_1_info_sets]) / sum(info_set.reach_pr_sum for info_set in player_1_info_sets)
         nash_distance_upper_bound = 2 * overall_regret_upper_bound
         if (i==1) or (i < 1000 and i % 100 == 0) or (i % 1000 == 0):
-            print(f"Iteration {i}. {expected_game_value=}, {overall_regret_upper_bound=}, {nash_distance_upper_bound=}")
+            print(f"Time={pd.Timestamp.now()}, Iteration {i}. {expected_game_value=}, {overall_regret_upper_bound=}, {nash_distance_upper_bound=}")
             iterations.append(i)
             expected_values.append(expected_game_value)
             regrets.append(overall_regret_upper_bound)
             nash_distances.append(nash_distance_upper_bound)
+            iterations_dict = {
+                "iterations": iterations,
+                "expected_values": expected_values,
+                "regrets": regrets,
+                "nash_distances": nash_distances
+            }
+            export_results(
+                expected_game_value,
+                information_set_map,
+                iterations_dict,
+                result_path
+            )
 
-    print(f"Finished after {i} iterations. {expected_game_value=}, {overall_regret_upper_bound=}, {nash_distance_upper_bound=}")
+    print(f"Time={pd.Timestamp.now()}. Finished after {i} iterations. {expected_game_value=}, {overall_regret_upper_bound=}, {nash_distance_upper_bound=}")
     iterations.append(i)
     expected_values.append(expected_game_value)
     regrets.append(overall_regret_upper_bound)
     nash_distances.append(nash_distance_upper_bound)
-
     iterations_dict = {
         "iterations": iterations,
         "expected_values": expected_values,
         "regrets": regrets,
         "nash_distances": nash_distances
     }
-
     export_results(
         expected_game_value,
         information_set_map,
         iterations_dict,
-        Path(f"results/push_fold_{NUM_CARDS}_cardsperplayer_{NUM_CARDS_PER_RANK}_cardsperrank_{STACK_SIZE}BB_stacksize.json"),
+        result_path
     )
 
 
