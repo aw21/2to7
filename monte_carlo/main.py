@@ -16,7 +16,9 @@ STACK_SIZE = 3  # Initial stack size for both players (5BB)
 POSTED_POT_PLAYER1 = 0.5  # Player 1 posts 0.5BB
 POSTED_POT_PLAYER2 = 1.0  # Player 2 posts 1BB
 NUM_CARDS = 1  # Number of cards each player is dealt
-N_ITERATIONS = 1000000
+N_ITERATIONS = 10000000
+INITIAL_POT = POSTED_POT_PLAYER1 + POSTED_POT_PLAYER2
+TERMINATION_THRESHOLD_PERCENTAGE = 0.001 # Percent of pot exploitability needed for termination
 DRAW_PREFIX = "DRAW_"
 
 # Ranks from 2 to Ace (ignoring suits)
@@ -36,7 +38,7 @@ RANK_VALUES = {
     "K": 11,  # King
     "A": 12,  # Ace
 }
-NUM_CARDS_PER_RANK = 1
+NUM_CARDS_PER_RANK = 4
 FULL_DECK = Multiset(RANKS * NUM_CARDS_PER_RANK)
 
 
@@ -176,7 +178,7 @@ class InformationSet:
     def make_positive(self, x):
         return np.where(x > 0, x, 0)
 
-    def actions_to_stratgies(self):
+    def actions_to_strategies(self):
         return {
             action: strategy
             for action, strategy in zip(self.actions, self.get_average_strategy())
@@ -416,22 +418,22 @@ def export_results(
     )
 
     results["player_1_preflop"] = {
-        str(key): value.actions_to_stratgies()
+        str(key): value.actions_to_strategies()
         for key, value in sorted_items
         if history_to_player(key.history) == Player.PLAYER_1 and len(key.history) == 2
     }
     results["player_1_postflop"] = {
-        str(key): value.actions_to_stratgies()
+        str(key): value.actions_to_strategies()
         for key, value in sorted_items
         if history_to_player(key.history) == Player.PLAYER_1 and len(key.history) == 5
     }
     results["player_2_preflop"] = {
-        str(key): value.actions_to_stratgies()
+        str(key): value.actions_to_strategies()
         for key, value in sorted_items
         if history_to_player(key.history) == Player.PLAYER_2 and len(key.history) == 3
     }
     results["player_2_postflop"] = {
-        str(key): value.actions_to_stratgies()
+        str(key): value.actions_to_strategies()
         for key, value in sorted_items
         if history_to_player(key.history) == Player.PLAYER_2 and len(key.history) == 4
     }
@@ -452,7 +454,9 @@ def main():
     information_set_map = {}  # map of information sets
     expected_game_value_sum = 0
 
-    for i in range(1, N_ITERATIONS + 1):
+    i = 0
+    nash_distance_upper_bound = np.inf
+    while nash_distance_upper_bound > TERMINATION_THRESHOLD_PERCENTAGE * INITIAL_POT:
         expected_game_value_sum += cfr(
             information_set_map=information_set_map,
             history="",
@@ -464,12 +468,18 @@ def main():
             pr_2=1,
             pr_c=1,
         )
+        i = i + 1
         for _, v in information_set_map.items():
             v.next_strategy()
         expected_game_value = expected_game_value_sum / i
+        player_1_info_sets = [info_set for key, info_set in information_set_map.items() if key.history == 'rr']
+        overall_regret_upper_bound = sum([max(max(info_set.regret_sum), 0) for info_set in player_1_info_sets]) / sum(info_set.reach_pr_sum for info_set in player_1_info_sets)
+        nash_distance_upper_bound = 2 * overall_regret_upper_bound
         if i % 10000 == 0:
-            print(f"Iteration {i}. {expected_game_value=}")
-    print()
+            print(f"Iteration {i}. {expected_game_value=}, {overall_regret_upper_bound=}, {nash_distance_upper_bound=}")
+
+    print(f"Finished after {i} iterations. {expected_game_value=}, {overall_regret_upper_bound=}, {nash_distance_upper_bound=}")
+
 
     export_results(
         expected_game_value,

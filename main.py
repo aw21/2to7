@@ -175,7 +175,7 @@ class InformationSet:
     def make_positive(self, x):
         return np.where(x > 0, x, 0)
 
-    def actions_to_stratgies(self):
+    def actions_to_strategies(self):
         return {
             action: strategy
             for action, strategy in zip(self.actions, self.get_average_strategy())
@@ -421,22 +421,22 @@ def export_results(
     )
 
     results["player_1_preflop"] = {
-        str(key): value.actions_to_stratgies()
+        str(key): value.actions_to_strategies()
         for key, value in sorted_items
         if history_to_player(key.history) == Player.PLAYER_1 and len(key.history) == 2
     }
     results["player_1_postflop"] = {
-        str(key): value.actions_to_stratgies()
+        str(key): value.actions_to_strategies()
         for key, value in sorted_items
         if history_to_player(key.history) == Player.PLAYER_1 and len(key.history) == 5
     }
     results["player_2_preflop"] = {
-        str(key): value.actions_to_stratgies()
+        str(key): value.actions_to_strategies()
         for key, value in sorted_items
         if history_to_player(key.history) == Player.PLAYER_2 and len(key.history) == 3
     }
     results["player_2_postflop"] = {
-        str(key): value.actions_to_stratgies()
+        str(key): value.actions_to_strategies()
         for key, value in sorted_items
         if history_to_player(key.history) == Player.PLAYER_2 and len(key.history) == 4
     }
