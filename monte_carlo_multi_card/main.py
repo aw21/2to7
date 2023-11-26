@@ -626,7 +626,7 @@ def main():
         expected_game_value,
         information_set_map,
         iterations_dict,
-        Path(f"results/push_fold_{STACK_SIZE}BB.json"),
+        Path(f"results/push_fold_{NUM_CARDS}_cardsperplayer_{NUM_CARDS_PER_RANK}_cardsperrank_{STACK_SIZE}BB_stacksize.json"),
     )
 
 
