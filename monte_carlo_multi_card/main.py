@@ -2,7 +2,7 @@ import random
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, Optional, List
 
 import numpy as np
 import json
@@ -12,13 +12,13 @@ InformationSetKey = Tuple[str, str]
 
 # Define game-specific constants and rules
 NUM_PLAYERS = 2
-STACK_SIZE = 3  # Initial stack size for both players (5BB)
+STACK_SIZE = 3  # Initial stack size for both players
 POSTED_POT_PLAYER1 = 0.5  # Player 1 posts 0.5BB
 POSTED_POT_PLAYER2 = 1.0  # Player 2 posts 1BB
-NUM_CARDS = 1  # Number of cards each player is dealt
-N_ITERATIONS = 10000000
+NUM_CARDS = 2  # Number of cards each player is dealt
+NUM_CARDS_PER_RANK = 2
 INITIAL_POT = POSTED_POT_PLAYER1 + POSTED_POT_PLAYER2
-TERMINATION_THRESHOLD_PERCENTAGE = 0.001 # Percent of pot exploitability needed for termination
+TERMINATION_THRESHOLD_PERCENTAGE = 0.01 # Percent of pot exploitability needed for termination
 DRAW_PREFIX = "DRAW_"
 
 # Ranks from 2 to Ace (ignoring suits)
@@ -38,20 +38,74 @@ RANK_VALUES = {
     "K": 11,  # King
     "A": 12,  # Ace
 }
-NUM_CARDS_PER_RANK = 4
 FULL_DECK = Multiset(RANKS * NUM_CARDS_PER_RANK)
+FULL_DECK_AS_LIST = list(FULL_DECK)
+
+random.seed("CS229")
 
 
+def calculate_hand_rank(cards: Tuple[str, ...]) -> Tuple[Tuple[int, int], ...]:
+    """
+    Calculate the rank of a poker hand based on Texas Hold'em rules.
 
+    Args:
+        cards (list): A list of card ranks (e.g., ['2', '5', '7', '9', 'A']). If there are >5 cards, throw an error.
+
+    Returns:
+        int: The hand rank, where lower values indicate weaker hands.
+    """
+    num_cards = len(cards)
+    if num_cards > 5:
+        raise ValueError(
+            f"Provided cards {cards}. This has length {len(cards)}, but only 5 cards or less are supported"
+        )
+
+    # Create a dictionary to count the frequency of each rank
+    card_count = {}
+    for card in cards:
+        rank = RANK_VALUES[card]
+        if rank in card_count:
+            card_count[rank] += 1
+        else:
+            card_count[rank] = 1
+
+    quads = list(
+        reversed(sorted([rank for rank, count in card_count.items() if count == 4]))
+    )
+    trips = list(
+        reversed(sorted([rank for rank, count in card_count.items() if count == 3]))
+    )
+    pairs = list(
+        reversed(sorted([rank for rank, count in card_count.items() if count == 2]))
+    )
+    no_pairs = list(
+        reversed(sorted([rank for rank, count in card_count.items() if count == 1]))
+    )
+
+    hand_rank = []
+    for rank in quads:
+        hand_rank.append((4, rank))
+    for rank in trips:
+        hand_rank.append((3, rank))
+    for rank in pairs:
+        hand_rank.append((2, rank))
+    for rank in no_pairs:
+        hand_rank.append((1, rank))
+
+    while len(hand_rank) < num_cards:
+        hand_rank.append((0, 0))
+
+    hand_rank = tuple(hand_rank)
+    return hand_rank
 
 
 @dataclass(frozen=True, eq=True, order=True)
 class InformationSetKey:
-    card: str
+    cards: Tuple[str, ...]
     history: str
 
     def __str__(self):
-        return f"{self.card}_{self.history}"
+        return f"{''.join(self.cards)}_{self.history}"
 
 
 class Player(Enum):
@@ -127,7 +181,6 @@ def next_history_util_multiplier(history: str, next_history: str) -> float:
 class InformationSet:
     def __init__(self, key: InformationSetKey):
         self.key = key
-        # TODO adjust for multiple cards. For one card, this could be ALL_IN/FOLD or DRAW_0/DRAW_1
         if len(key.history) == 2 or len(key.history) == 3:
             self.actions = ["ALL_IN", "FOLD"]
         elif len(key.history) == 4 or len(key.history) == 5:
@@ -179,7 +232,7 @@ class InformationSet:
         return strategy
 
     def make_positive(self, x):
-        return np.where(x > 0, x, 0)
+        return np.clip(x, 0, None)
 
     def actions_to_strategies(self):
         return {
@@ -196,12 +249,86 @@ class InformationSet:
         return "{} {}".format(str(self.key).ljust(10), actions_to_strategies)
 
 
+def draw_result(current_cards: Tuple[str], cards_to_draw_from: List[str], n_cards: int) -> Tuple[Tuple[str,...], Multiset]:
+    """
+
+    Args:
+        current_cards: Current cards in player's hand
+        cards_to_draw_from: List of cards to draw from
+        n_cards: Number of cards to draw
+
+    Replace n cards.
+
+    Returns:
+        new cards, discarded cards
+
+    """
+    card_count = {}
+    for card in current_cards:
+        if card in card_count:
+            card_count[card] += 1
+        else:
+            card_count[card] = 1
+
+    quads = list(
+        sorted([card for card, count in card_count.items() if count == 4], key=lambda x: RANK_VALUES[x])
+    )
+    trips = list(
+        sorted([card for card, count in card_count.items() if count == 3], key=lambda x: RANK_VALUES[x])
+    )
+    pairs = list(
+        sorted([card for card, count in card_count.items() if count == 2], key=lambda x: RANK_VALUES[x])
+    )
+    no_pairs = list(
+        sorted([card for card, count in card_count.items() if count == 1], key=lambda x: RANK_VALUES[x])
+    )
+
+
+    cards_to_discard = []
+
+    while len(cards_to_discard) < n_cards:
+        if len(quads) > 0:
+            cards_to_discard.append(quads[-1])
+            trips.append(quads[-1])
+            trips = sorted(trips, key=lambda x: RANK_VALUES[x])
+            quads = quads[:-1]
+            continue
+        if len(trips) > 0:
+            cards_to_discard.append(trips[-1])
+            pairs.append(trips[-1])
+            pairs = sorted(pairs, key=lambda x: RANK_VALUES[x])
+            trips = trips[:-1]
+            continue
+        if len(pairs) > 0:
+            cards_to_discard.append(pairs[-1])
+            no_pairs.append(pairs[-1])
+            no_pairs = sorted(no_pairs, key=lambda x: RANK_VALUES[x])
+            pairs = pairs[:-1]
+            continue
+        if len(no_pairs) > 0:
+            cards_to_discard.append(no_pairs[-1])
+            no_pairs = no_pairs[:-1]
+            continue
+
+        if len(no_pairs) == 0:
+            raise RuntimeError("Discarded too many cards")
+
+
+    cards_to_discard = Multiset(cards_to_discard)
+    cards_drawn = random.sample(cards_to_draw_from, n_cards)
+    not_discarded = Multiset(current_cards) - Multiset(cards_to_discard)
+    new_cards = tuple(sorted([*not_discarded, *cards_drawn], key=lambda x: RANK_VALUES[x], reverse=True))
+
+    return new_cards, cards_to_discard
+
+
+
 def cfr(
     *,
     information_set_map: Dict[InformationSetKey, InformationSet],
     history: str,
-    card_1: str,
-    card_2: str,
+    cards_1: Optional[Tuple[str, ...]],
+    cards_2: Optional[Tuple[str, ...]],
     player_1_discarded: Multiset,
     player_2_discarded: Multiset,
     pr_1: float,
@@ -223,9 +350,9 @@ def cfr(
         'd': deal action
         'c': check action
         'b': bet action
-    card_1 : int
+    cards_1 : int
         player A's cards. Sorted tuple
-    card_2 : int
+    cards_2 : int
         player B's cards. Sorted tuple
     pr_1 : (0, 1.0), float
         The probability that player A reaches `history`.
@@ -238,12 +365,11 @@ def cfr(
         return chance_util(information_set_map)
 
     if is_terminal(history):
-        return terminal_util(history, card_1, card_2)
+        return terminal_util(history, cards_1, cards_2)
 
-    n = len(history)
     player = history_to_player(history)
     info_set = get_info_set(
-        information_set_map, card_1 if player == Player.PLAYER_1 else card_2, history
+        information_set_map, cards_1 if player == Player.PLAYER_1 else cards_2, history
     )
 
     strategy = info_set.strategy
@@ -259,53 +385,46 @@ def cfr(
         history_char = action_to_history_char(action)
         next_history = history + history_char
         util_multiplier = next_history_util_multiplier(history, next_history)
-        # TODO adjust for multiple cards
-        if action.startswith(DRAW_PREFIX) and action == DRAW_PREFIX + "1":
+        if action.startswith(DRAW_PREFIX) and action != DRAW_PREFIX + "0":
             n_cards_to_draw = int(history_char)
-            if n_cards_to_draw == 1:
-                expected_value = 0
-                if player == Player.PLAYER_1:
-                    player_1_discarded = Multiset([card_1])
-                    cards_to_draw_from = (
-                        FULL_DECK - Multiset([card_1, card_2]) - player_2_discarded
-                    )
-                    card_drawn = random.sample(sorted(cards_to_draw_from), 1)[0]
-                    card_1 = card_drawn
-                    action_utils[i] = util_multiplier * cfr(
-                            information_set_map=information_set_map,
-                            history=next_history,
-                            card_1=card_1,
-                            card_2=card_2,
-                            player_1_discarded=player_1_discarded,
-                            player_2_discarded=player_2_discarded,
-                            pr_1=pr_1 * strategy[i],
-                            pr_2=pr_2,
-                            pr_c=pr_c,
-                        )
-                else:
-                    player_2_discarded = Multiset([card_2])
-                    cards_to_draw_from = FULL_DECK - Multiset([card_1, card_2])
-                    card_drawn = random.sample(sorted(cards_to_draw_from), 1)[0]
-                    card_2 = card_drawn
-                    action_utils[i] = util_multiplier * cfr(
+            if player == Player.PLAYER_1:
+                cards_to_draw_from = list(
+                    FULL_DECK - Multiset(cards_1) - Multiset(cards_2) - player_2_discarded
+                )
+                new_cards_1, player_1_discarded = draw_result(cards_1, cards_to_draw_from, n_cards_to_draw)
+                action_utils[i] = util_multiplier * cfr(
                         information_set_map=information_set_map,
                         history=next_history,
-                        card_1=card_1,
-                        card_2=card_2,
+                        cards_1=new_cards_1,
+                        cards_2=cards_2,
                         player_1_discarded=player_1_discarded,
                         player_2_discarded=player_2_discarded,
-                        pr_1=pr_1,
-                        pr_2=pr_2 * strategy[i],
+                        pr_1=pr_1 * strategy[i],
+                        pr_2=pr_2,
                         pr_c=pr_c,
                     )
+            else:
+                cards_to_draw_from = list(FULL_DECK - Multiset(cards_1) - Multiset(cards_2))
+                cards_2, player_2_discarded = draw_result(cards_2, cards_to_draw_from, n_cards_to_draw)
+                action_utils[i] = util_multiplier * cfr(
+                    information_set_map=information_set_map,
+                    history=next_history,
+                    cards_1=cards_1,
+                    cards_2=cards_2,
+                    player_1_discarded=player_1_discarded,
+                    player_2_discarded=player_2_discarded,
+                    pr_1=pr_1,
+                    pr_2=pr_2 * strategy[i],
+                    pr_c=pr_c,
+                )
 
         else:
             if player == Player.PLAYER_1:
                 action_utils[i] = util_multiplier * cfr(
                     information_set_map=information_set_map,
                     history=next_history,
-                    card_1=card_1,
-                    card_2=card_2,
+                    cards_1=cards_1,
+                    cards_2=cards_2,
                     player_1_discarded=player_1_discarded,
                     player_2_discarded=player_2_discarded,
                     pr_1=pr_1 * strategy[i],
@@ -316,8 +435,8 @@ def cfr(
                 action_utils[i] = util_multiplier * cfr(
                     information_set_map=information_set_map,
                     history=next_history,
-                    card_1=card_1,
-                    card_2=card_2,
+                    cards_1=cards_1,
+                    cards_2=cards_2,
                     player_1_discarded=player_1_discarded,
                     player_2_discarded=player_2_discarded,
                     pr_1=pr_1,
@@ -344,13 +463,14 @@ def is_deal_node(history):
 
 
 def chance_util(information_set_map) -> float:
-    # TODO adjust for multiple cards
-    card_1, card_2 = random.sample(sorted(FULL_DECK), 2)
+    cards = random.sample(FULL_DECK_AS_LIST, 2*NUM_CARDS)
+    cards_1 = tuple(sorted(cards[:NUM_CARDS], key=lambda x: RANK_VALUES[x], reverse=True))
+    cards_2 = tuple(sorted(cards[NUM_CARDS:], key=lambda x: RANK_VALUES[x], reverse=True))
     expected_value = cfr(
         information_set_map=information_set_map,
         history="rr",
-        card_1=card_1,
-        card_2=card_2,
+        cards_1=cards_1,
+        cards_2=cards_2,
         player_1_discarded=Multiset(),
         player_2_discarded=Multiset(),
         pr_1=1.0,
@@ -364,32 +484,30 @@ def is_terminal(history: str):
     """
     Returns True if the history is a terminal history.
     """
-    # TODO adjust for multiple cards
     if history == "rrf" or history == "rraf" or len(history) == 6:
         return True
     return False
 
 
-def terminal_util(history: str, card_1: str, card_2: str):
+def terminal_util(history: str, cards_1: Tuple[str], cards_2: Tuple[str]):
     """
     Returns the utility of a terminal history from the perspective of player 1
     """
-    # TODO adjust for multiple cards
     if history == "rrf":
         return -POSTED_POT_PLAYER1
     if history == "rraf":
         return POSTED_POT_PLAYER2
-    return STACK_SIZE if RANK_VALUES[card_1] < RANK_VALUES[card_2] else -STACK_SIZE
+    reward = STACK_SIZE if calculate_hand_rank(cards_1) < calculate_hand_rank(cards_2) else -STACK_SIZE
+    return reward
 
 
 def get_info_set(
-    i_map: Dict[InformationSetKey, InformationSet], card: str, history: str
+    i_map: Dict[InformationSetKey, InformationSet], cards: Tuple[str, ...], history: str
 ) -> InformationSet:
     """
     Retrieve information set from dictionary.
     """
-    # TODO adjust for multiple cards
-    key = InformationSetKey(card, history)
+    key = InformationSetKey(cards, history)
 
     if key not in i_map:
         info_set = InformationSet(key)
@@ -409,7 +527,6 @@ def export_results(
         "stack_size": STACK_SIZE,
         "posted_pot_p1": POSTED_POT_PLAYER1,
         "posted_pot_p2": POSTED_POT_PLAYER2,
-        "num_iterations": N_ITERATIONS,
         "num_cards": NUM_CARDS,
         "num_cards_per_rank": NUM_CARDS_PER_RANK,
     }
@@ -417,7 +534,7 @@ def export_results(
     results["player_2_expected_value"] = -ev
 
     sorted_items = sorted(
-        information_set_map.items(), key=lambda x: RANK_VALUES[x[0].card]
+        information_set_map.items(), key=lambda x: tuple(RANK_VALUES[card] for card in x[0].cards), reverse=True
     )
 
     results["player_1_preflop"] = {
@@ -459,12 +576,12 @@ def main():
 
     i = 0
     nash_distance_upper_bound = np.inf
-    while nash_distance_upper_bound > TERMINATION_THRESHOLD_PERCENTAGE * INITIAL_POT:
+    while nash_distance_upper_bound > (TERMINATION_THRESHOLD_PERCENTAGE * INITIAL_POT):
         expected_game_value_sum += cfr(
             information_set_map=information_set_map,
             history="",
-            card_1=-1,
-            card_2=-1,
+            cards_1=None,
+            cards_2=None,
             player_1_discarded=Multiset(),
             player_2_discarded=Multiset(),
             pr_1=1,
@@ -478,7 +595,7 @@ def main():
         player_1_info_sets = [info_set for key, info_set in information_set_map.items() if key.history == 'rr']
         overall_regret_upper_bound = sum([max(max(info_set.regret_sum), 0) for info_set in player_1_info_sets]) / sum(info_set.reach_pr_sum for info_set in player_1_info_sets)
         nash_distance_upper_bound = 2 * overall_regret_upper_bound
-        if i % 10000 == 0:
+        if i % 1000 == 0:
             print(f"Iteration {i}. {expected_game_value=}, {overall_regret_upper_bound=}, {nash_distance_upper_bound=}")
 
     print(f"Finished after {i} iterations. {expected_game_value=}, {overall_regret_upper_bound=}, {nash_distance_upper_bound=}")

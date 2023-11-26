@@ -1,8 +1,8 @@
-from typing import List
+from typing import List, Tuple
 
 
 # TODO hypothetical function to use when there are actually 5 cards
-def calculate_hand_rank(cards: List[str]):
+def calculate_hand_rank(cards: List[str]) -> List[Tuple[int, int]]:
     """
     Calculate the rank of a poker hand based on Texas Hold'em rules.
 
