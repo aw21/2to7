@@ -19,7 +19,7 @@ N_ITERATIONS = 1000
 DRAW_PREFIX = "DRAW_"
 
 # Ranks from 2 to Ace (ignoring suits)
-RANKS = [str(rank) for rank in range(2, 10)] + ["J", "Q", "K", "A"]
+RANKS = [str(rank) for rank in range(2, 10)] + ["T", "J", "Q", "K", "A"]
 RANK_VALUES = {
     "2": 0,
     "3": 1,

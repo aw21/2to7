@@ -23,7 +23,7 @@ TERMINATION_THRESHOLD_PERCENTAGE = 0.001 # Percent of pot exploitability needed 
 DRAW_PREFIX = "DRAW_"
 
 # Ranks from 2 to Ace (ignoring suits)
-RANKS = [str(rank) for rank in range(2, 10)] + ["J", "Q", "K", "A"]
+RANKS = [str(rank) for rank in range(2, 10)] + ["T", "J", "Q", "K", "A"]
 RANK_VALUES = {
     "2": 0,
     "3": 1,
@@ -578,7 +578,7 @@ def main():
     expected_game_value_sum = 0
 
     i = 0
-    result_path = Path(f"results/push_fold_{NUM_CARDS}_cardsperplayer_{NUM_CARDS_PER_RANK}_cardsperrank_{STACK_SIZE}BB_stacksize.json")
+    result_path = Path(f"results_2/push_fold_{NUM_CARDS}_cardsperplayer_{NUM_CARDS_PER_RANK}_cardsperrank_{STACK_SIZE}BB_stacksize.json")
     nash_distance_upper_bound = np.inf
     iterations = []
     expected_values = []
