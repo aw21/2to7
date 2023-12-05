@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Tuple, Dict
 
 import numpy as np
+import pandas as pd
 import json
 from multiset import Multiset
 
@@ -16,6 +17,8 @@ POSTED_POT_PLAYER1 = 0.5  # Player 1 posts 0.5BB
 POSTED_POT_PLAYER2 = 1.0  # Player 2 posts 1BB
 NUM_CARDS = 1  # Number of cards each player is dealt
 N_ITERATIONS = 1000
+INITIAL_POT = POSTED_POT_PLAYER1 + POSTED_POT_PLAYER2
+TERMINATION_THRESHOLD_PERCENTAGE = 0.00001 # Percent of pot exploitability needed for termination
 DRAW_PREFIX = "DRAW_"
 
 # Ranks from 2 to Ace (ignoring suits)
@@ -345,7 +348,7 @@ def chance_util(information_set_map) -> float:
     for card_1 in RANKS:
         for card_2 in RANKS:
             if card_1 != card_2:
-                probability = 1 / 78
+                probability = 1 / 156
                 expected_value += probability * cfr(
                     information_set_map=information_set_map,
                     history="rr",
@@ -402,6 +405,7 @@ def get_info_set(
 def export_results(
     ev: float,
     information_set_map: Dict[InformationSetKey, InformationSet],
+    iterations_dict: Dict,
     file_path: Path,
 ):
     results = {}
@@ -409,15 +413,16 @@ def export_results(
         "stack_size": STACK_SIZE,
         "posted_pot_p1": POSTED_POT_PLAYER1,
         "posted_pot_p2": POSTED_POT_PLAYER2,
-        "num_iterations": N_ITERATIONS,
         "num_cards": NUM_CARDS,
         "num_cards_per_rank": NUM_CARDS_PER_RANK,
+        "termination_threshold_percentage": TERMINATION_THRESHOLD_PERCENTAGE
     }
     results["player_1_expected_value"] = ev
     results["player_2_expected_value"] = -ev
+    results["iteration_info"] = iterations_dict
 
     sorted_items = sorted(
-        information_set_map.items(), key=lambda x: RANK_VALUES[x[0].card]
+        information_set_map.items(), key=lambda x: RANK_VALUES[x[0].card], reverse=True
     )
 
     results["player_1_preflop"] = {
@@ -457,7 +462,14 @@ def main():
     information_set_map = {}  # map of information sets
     expected_game_value_sum = 0
 
-    for i in range(1, N_ITERATIONS + 1):
+    i = 0
+    result_path = Path(f"results/push_fold_{NUM_CARDS}_cardsperplayer_{NUM_CARDS_PER_RANK}_cardsperrank_{STACK_SIZE}BB_stacksize.json")
+    nash_distance_upper_bound = np.inf
+    iterations = []
+    expected_values = []
+    regrets = []
+    nash_distances = []
+    while nash_distance_upper_bound > (TERMINATION_THRESHOLD_PERCENTAGE * INITIAL_POT):
         expected_game_value_sum += cfr(
             information_set_map=information_set_map,
             history="",
@@ -469,16 +481,48 @@ def main():
             pr_2=1,
             pr_c=1,
         )
+        i = i + 1
         for _, v in information_set_map.items():
             v.next_strategy()
         expected_game_value = expected_game_value_sum / i
-        print(f"Iteration {i}. {expected_game_value=}")
-    print()
+        player_1_info_sets = [info_set for key, info_set in information_set_map.items() if key.history == 'rr']
+        overall_regret_upper_bound = sum([max(max(info_set.regret_sum), 0) for info_set in player_1_info_sets]) / sum(info_set.reach_pr_sum for info_set in player_1_info_sets)
+        nash_distance_upper_bound = 2 * overall_regret_upper_bound
+        if (i==1) or (i < 1000 and i % 100 == 0) or (i % 1000 == 0):
+            print(f"Time={pd.Timestamp.now()}, Iteration {i}. {expected_game_value=}, {overall_regret_upper_bound=}, {nash_distance_upper_bound=}")
+            iterations.append(i)
+            expected_values.append(expected_game_value)
+            regrets.append(overall_regret_upper_bound)
+            nash_distances.append(nash_distance_upper_bound)
+            iterations_dict = {
+                "iterations": iterations,
+                "expected_values": expected_values,
+                "regrets": regrets,
+                "nash_distances": nash_distances
+            }
+            export_results(
+                expected_game_value,
+                information_set_map,
+                iterations_dict,
+                result_path
+            )
 
+    print(f"Time={pd.Timestamp.now()}. Finished after {i} iterations. {expected_game_value=}, {overall_regret_upper_bound=}, {nash_distance_upper_bound=}")
+    iterations.append(i)
+    expected_values.append(expected_game_value)
+    regrets.append(overall_regret_upper_bound)
+    nash_distances.append(nash_distance_upper_bound)
+    iterations_dict = {
+        "iterations": iterations,
+        "expected_values": expected_values,
+        "regrets": regrets,
+        "nash_distances": nash_distances
+    }
     export_results(
         expected_game_value,
         information_set_map,
-        Path(f"results/push_fold_{STACK_SIZE}BB.json"),
+        iterations_dict,
+        result_path
     )
 
 

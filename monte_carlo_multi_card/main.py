@@ -498,7 +498,12 @@ def terminal_util(history: str, cards_1: Tuple[str], cards_2: Tuple[str]):
         return -POSTED_POT_PLAYER1
     if history == "rraf":
         return POSTED_POT_PLAYER2
-    reward = STACK_SIZE if calculate_hand_rank(cards_1) < calculate_hand_rank(cards_2) else -STACK_SIZE
+
+    reward = 0
+    if calculate_hand_rank(cards_1) < calculate_hand_rank(cards_2):
+        reward = STACK_SIZE
+    elif calculate_hand_rank(cards_1) > calculate_hand_rank(cards_2):
+        reward = -STACK_SIZE
     return reward
 
 
